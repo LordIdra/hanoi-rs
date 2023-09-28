@@ -25,7 +25,7 @@ impl Solution {
                     back_jumps.insert(i, start_index + 1);
                     forward_jumps.insert(start_index, i + 1);
                 }
-                character => {
+                _ => {
                     //eprintln!("Invalid token '{}'", character);
                     return Err(());
                 }

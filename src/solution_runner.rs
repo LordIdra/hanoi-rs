@@ -14,8 +14,9 @@ pub struct SolutionRunner {
 impl SolutionRunner {
     // Returns true if goal met
     pub fn run(solution: &Solution, problem: Problem) -> bool {
+        let arrangement = problem.get_initial_arrangement();
         SolutionRunner {
-            arrangement: problem.get_initial_arrangement(), 
+            arrangement, 
             cycles: 0, 
             program_counter: 0, 
             tower_position: 0,
