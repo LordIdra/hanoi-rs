@@ -1,8 +1,5 @@
-use std::{fs::File, io::{Write, LineWriter}, time::Instant, sync::{Mutex, Arc}, thread};
+use std::{fs::File, io::{Write, LineWriter}, time::Instant, sync::{Mutex, Arc}};
 
-use async_recursion::async_recursion;
-use clap::Parser;
-use futures::{future::join_all, executor::block_on};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use solution::Solution;
 use solution_runner::SolutionRunner;
@@ -13,7 +10,7 @@ mod solution;
 
 const CHARACTERS: [char; 6] = ['>', '<', '.', '~', '[', ']'];
 
-fn run(program: Vec<char>, i: i32, attempts: Arc<Mutex<i32>>, max_attempts: i32, programs: Arc<Mutex<Vec<Vec<char>>>>) {
+fn run(program: Vec<char>, i: i32, attempts: Arc<Mutex<i64>>, max_attempts: i64, programs: Arc<Mutex<Vec<Vec<char>>>>, start_time: Instant) {
     if i == 0 {
         if let Ok(solution) = Solution::load(program) {
             if SolutionRunner::run(&solution) {
@@ -21,11 +18,14 @@ fn run(program: Vec<char>, i: i32, attempts: Arc<Mutex<i32>>, max_attempts: i32,
             }
         }
 
-        let mut attempts_guard = *attempts.lock().unwrap();
-        attempts_guard += 1;
-        if attempts_guard % 100000 == 0 {
-            let percentage = 100.0 * (attempts_guard as f32) / (max_attempts as f32);
-            println!("{}/{} ({}%)", attempts_guard, max_attempts, percentage)
+        let mut attempts_guard = attempts.lock().unwrap();
+        *attempts_guard += 1;
+        if *attempts_guard % 1000000 == 0 {
+            let attempts_f32 = *attempts_guard as f32;
+            let attempts_per_second = attempts_f32 / (Instant::now() - start_time).as_secs_f32();
+            let remaining_time = (max_attempts as f32 - attempts_f32) / attempts_per_second;
+            let percentage = 100.0 * attempts_f32 / (max_attempts as f32);
+            println!("{}/{} ({}%) (remaining: {}s)", attempts_guard, max_attempts, percentage, remaining_time)
         }
 
         return;
@@ -34,23 +34,23 @@ fn run(program: Vec<char>, i: i32, attempts: Arc<Mutex<i32>>, max_attempts: i32,
     let run_closure = |character: &char| {
         let mut program = program.clone();
         program.push(*character);
-        run(program, i-1, attempts.clone(), max_attempts, programs.clone());
+        run(program, i-1, attempts.clone(), max_attempts, programs.clone(), start_time);
     };
 
-    CHARACTERS.iter().for_each(run_closure);
+    CHARACTERS.par_iter().for_each(run_closure);
 }
 
 fn main() -> Result<(), ()> {
-    for character_count in 2..13 {
+    for character_count in 13..14 {
         let start_time = Instant::now();
-        let max_attempts = i32::pow(CHARACTERS.len() as i32, character_count as u32 - 1);
+        let max_attempts = i64::pow(CHARACTERS.len() as i64, character_count as u32 - 1);
         let attempts = Arc::new(Mutex::new(0));
         let programs = Arc::new(Mutex::new(vec![]));
         println!("=============");
         println!("{} characters", character_count);
         println!("=============");
 
-        run(vec!['.'], character_count-1, attempts, max_attempts, programs.clone());
+        run(vec!['.'], character_count-1, attempts, max_attempts, programs.clone(), start_time);
 
         let time_taken = Instant::now() - start_time;
         println!("{} characters complete in {}s with {} solutions", character_count, time_taken.as_secs_f32(), programs.lock().unwrap().len());
