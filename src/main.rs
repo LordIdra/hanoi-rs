@@ -1,25 +1,22 @@
-use std::{fs::File, io::{Write, LineWriter}, time::Instant, sync::{Mutex, Arc}};
+use std::{fs::File, io::{Write, LineWriter}, time::Instant, sync::{Mutex, Arc}, thread};
 
 use async_recursion::async_recursion;
 use clap::Parser;
-use cli::Args;
 use futures::{future::join_all, executor::block_on};
-use problem::Problem;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use solution::Solution;
 use solution_runner::SolutionRunner;
 
-mod cli;
 mod problem;
 mod solution_runner;
 mod solution;
 
 const CHARACTERS: [char; 6] = ['>', '<', '.', '~', '[', ']'];
 
-#[async_recursion]
-async fn run(problem: Problem, string: String, i: i32, attempts: Arc<Mutex<i32>>, max_attempts: i32, programs: Arc<Mutex<Vec<String>>>) {
+fn run(program: Vec<char>, i: i32, attempts: Arc<Mutex<i32>>, max_attempts: i32, programs: Arc<Mutex<Vec<Vec<char>>>>) {
     if i == 0 {
-        if let Ok(solution) = Solution::load(string) {
-            if SolutionRunner::run(&solution, problem) {
+        if let Ok(solution) = Solution::load(program) {
+            if SolutionRunner::run(&solution) {
                 programs.lock().unwrap().push(solution.get_program());
             }
         }
@@ -34,20 +31,17 @@ async fn run(problem: Problem, string: String, i: i32, attempts: Arc<Mutex<i32>>
         return;
     }
 
-    let mut threads = vec![];
+    let run_closure = |character: &char| {
+        let mut program = program.clone();
+        program.push(*character);
+        run(program, i-1, attempts.clone(), max_attempts, programs.clone());
+    };
 
-    for character in CHARACTERS {
-        threads.push(run(problem.clone(), string.clone() + character.to_string().as_str(), i-1, attempts.clone(), max_attempts, programs.clone()));
-    }
-
-    join_all(threads).await;
+    CHARACTERS.iter().for_each(run_closure);
 }
 
 fn main() -> Result<(), ()> {
-    let args = Args::parse();
-    let problem = Problem::load(&args)?;
-    
-    for character_count in 2..12 {
+    for character_count in 2..13 {
         let start_time = Instant::now();
         let max_attempts = i32::pow(CHARACTERS.len() as i32, character_count as u32 - 1);
         let attempts = Arc::new(Mutex::new(0));
@@ -56,7 +50,7 @@ fn main() -> Result<(), ()> {
         println!("{} characters", character_count);
         println!("=============");
 
-        block_on(run(problem.clone(), ".".to_string(), character_count-1, attempts, max_attempts, programs.clone()));
+        run(vec!['.'], character_count-1, attempts, max_attempts, programs.clone());
 
         let time_taken = Instant::now() - start_time;
         println!("{} characters complete in {}s with {} solutions", character_count, time_taken.as_secs_f32(), programs.lock().unwrap().len());
@@ -65,6 +59,7 @@ fn main() -> Result<(), ()> {
         let file = File::create(format!("all_solutions/{}", character_count)).unwrap();
         let mut writer = LineWriter::new(file);
         for program in programs.lock().unwrap().iter() {
+            let program = String::from_iter(program);
             writer.write_all(program.as_bytes()).expect("Failed to write to file");
             writer.write_all(b"\n").expect("Failed to write to file");
         }

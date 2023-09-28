@@ -1,6 +1,6 @@
 use std::mem::swap;
 
-use crate::{solution::Solution, problem::{Problem, Arrangement}};
+use crate::{solution::Solution, problem::{Arrangement, get_initial_arrangement, is_final_arrangement}};
 
 pub struct SolutionRunner {
     arrangement: Arrangement,
@@ -13,8 +13,8 @@ pub struct SolutionRunner {
 
 impl SolutionRunner {
     // Returns true if goal met
-    pub fn run(solution: &Solution, problem: Problem) -> bool {
-        let arrangement = problem.get_initial_arrangement();
+    pub fn run(solution: &Solution) -> bool {
+        let arrangement = get_initial_arrangement();
         SolutionRunner {
             arrangement, 
             cycles: 0, 
@@ -22,10 +22,10 @@ impl SolutionRunner {
             tower_position: 0,
             held_value: None,
             scratch: None,
-        }.mainloop(solution, problem)
+        }.mainloop(solution)
     }
 
-    fn mainloop(&mut self, solution: &Solution, problem: Problem) -> bool {
+    fn mainloop(&mut self, solution: &Solution) -> bool {
         loop {
             // Prevent infinite loops
             if self.cycles > 500 {
@@ -39,7 +39,7 @@ impl SolutionRunner {
 
             self.cycles += 1;
 
-            if problem.is_final_arrangement(&self.arrangement) {
+            if is_final_arrangement(&self.arrangement) {
                 //println!("Goal met!");
                 return true;
             }
