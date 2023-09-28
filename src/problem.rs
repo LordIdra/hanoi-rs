@@ -5,7 +5,7 @@ use crate::cli::Args;
 
 pub type Arrangement = Vec<Vec<i32>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Problem {
     initial_arrangement: Arrangement,
     goals: Vec<Arrangement>,
