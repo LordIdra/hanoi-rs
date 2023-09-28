@@ -1,8 +1,9 @@
-use std::mem::swap;
+use std::{mem::swap, collections::{HashSet, BTreeMap}};
 
 use crate::{solution::Solution, problem::{Arrangement, get_initial_arrangement, is_final_arrangement}};
 
 pub struct SolutionRunner {
+    visited_hashes: BTreeMap<usize, HashSet<i32>>,
     arrangement: Arrangement,
     cycles: usize,
     program_counter: usize,
@@ -16,6 +17,7 @@ impl SolutionRunner {
     pub fn run(solution: &Solution) -> bool {
         let arrangement = get_initial_arrangement();
         SolutionRunner {
+            visited_hashes: BTreeMap::new(),
             arrangement, 
             cycles: 0, 
             program_counter: 0, 
@@ -27,34 +29,35 @@ impl SolutionRunner {
 
     fn mainloop(&mut self, solution: &Solution) -> bool {
         loop {
-            // Prevent infinite loops
-            if self.cycles > 500 {
+            let token = solution.get_token(self.program_counter);
+            if token.is_none() {
                 return false;
             }
 
-            if self.step(solution) {
-                //println!("Program finished without meeting a goal.");
-                return false;
+            if token.unwrap() == ']' {
+                let hash = self.hash_state();
+                let visited_hashes = self.visited_hashes
+                    .entry(self.program_counter)
+                    .or_insert_with(HashSet::new);
+                // Entered infinite loop
+                if visited_hashes.contains(&hash) {
+                    return false;
+                }
+                visited_hashes.insert(hash);
             }
 
+
+            self.step(solution, token.unwrap());
             self.cycles += 1;
-
             if is_final_arrangement(&self.arrangement) {
-                //println!("Goal met!");
                 return true;
             }
         }
     }
 
-    // Returns true if program finished
-    fn step(&mut self, solution: &Solution) -> bool {
-        let token = solution.get_token(self.program_counter);
-        if token.is_none() {
-            return true;
-        }
-
+    fn step(&mut self, solution: &Solution, token: char) {
         let mut next_program_counter = self.program_counter + 1;
-        match token.unwrap() {
+        match token {
             '>' => { 
                 self.tower_position += 1;
                 if self.tower_position >= self.arrangement.len() {
@@ -101,7 +104,22 @@ impl SolutionRunner {
         }
 
         self.program_counter = next_program_counter;
+    }
 
-        false
+    fn hash_state(&self) -> i32 {
+        let mut hash = 0;
+
+        hash +=      self.arrangement[0].len() as i32;
+        hash += 4  * self.arrangement[1].len() as i32;
+        hash += 16 * self.arrangement[2].len() as i32;
+        hash += 64 * self.tower_position as i32;
+        if let Some(scratch) = self.scratch {
+            hash += 256 * scratch;
+        }
+        if let Some(held_value) = self.held_value {
+            hash += 1024 * held_value;
+        }
+
+        hash
     }
 }

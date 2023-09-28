@@ -10,50 +10,37 @@ mod solution;
 
 const CHARACTERS: [char; 6] = ['>', '<', '.', '~', '[', ']'];
 
-fn run(program: Vec<char>, i: i32, attempts: Arc<Mutex<i64>>, max_attempts: i64, programs: Arc<Mutex<Vec<Vec<char>>>>, start_time: Instant) {
+fn run(program: Vec<char>, i: i32, programs: Arc<Mutex<Vec<Vec<char>>>>) {
     if i == 0 {
         if let Ok(solution) = Solution::load(program) {
             if SolutionRunner::run(&solution) {
                 programs.lock().unwrap().push(solution.get_program());
             }
         }
-
-        let mut attempts_guard = attempts.lock().unwrap();
-        *attempts_guard += 1;
-        if *attempts_guard % 1000000 == 0 {
-            let attempts_f32 = *attempts_guard as f32;
-            let attempts_per_second = attempts_f32 / (Instant::now() - start_time).as_secs_f32();
-            let remaining_time = (max_attempts as f32 - attempts_f32) / attempts_per_second;
-            let percentage = 100.0 * attempts_f32 / (max_attempts as f32);
-            println!("{}/{} ({}%) (remaining: {}s)", attempts_guard, max_attempts, percentage, remaining_time)
-        }
-
         return;
     }
 
-    let run_closure = |character: &char| {
+    let closure = |character: &char| {
         let mut program = program.clone();
         program.push(*character);
-        run(program, i-1, attempts.clone(), max_attempts, programs.clone(), start_time);
+        run(program, i-1, programs.clone());
     };
 
-    CHARACTERS.par_iter().for_each(run_closure);
+    CHARACTERS.par_iter().for_each(closure);
 }
 
 fn main() -> Result<(), ()> {
-    for character_count in 13..14 {
+    for character_count in 13..16 {
         let start_time = Instant::now();
         let max_attempts = i64::pow(CHARACTERS.len() as i64, character_count as u32 - 1);
-        let attempts = Arc::new(Mutex::new(0));
         let programs = Arc::new(Mutex::new(vec![]));
-        println!("=============");
-        println!("{} characters", character_count);
-        println!("=============");
+        println!("Starting {} characters", character_count);
 
-        run(vec!['.'], character_count-1, attempts, max_attempts, programs.clone(), start_time);
+        run(vec!['.'], character_count - 1, programs.clone());
 
         let time_taken = Instant::now() - start_time;
-        println!("{} characters complete in {}s with {} solutions", character_count, time_taken.as_secs_f32(), programs.lock().unwrap().len());
+        let attempts_per_second = (max_attempts as f64 / time_taken.as_millis() as f64) as i64 * 1000;
+        println!("{} characters complete in {}s with {} solutions ({} attempts/s)", character_count, time_taken.as_secs_f32(), programs.lock().unwrap().len(), attempts_per_second);
         println!("\n");
 
         let file = File::create(format!("all_solutions/{}", character_count)).unwrap();
@@ -64,13 +51,6 @@ fn main() -> Result<(), ()> {
             writer.write_all(b"\n").expect("Failed to write to file");
         }
     }
-    
-    // Load program and strip whitespace
-    // let program = fs::read_to_string(args.solution.clone())
-    //     .map_err(|err| eprintln!("Could not read file at '{}' with error '{}'", args.solution, err))?
-    //     .replace([' ', '\n'], "");
 
-    // let solution = Solution::load(".[>.>.>.>.".to_string())?;
-    // SolutionRunner::run(solution, problem);
     Ok(())
 }
