@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Solution {
     program: Vec<char>,
     back_jumps: Vec<usize>,
@@ -6,24 +6,45 @@ pub struct Solution {
 }
 
 impl Solution {
-    pub fn load(program: Vec<char>) -> Result<Self, ()> {
-        // Short circuit if there are not the same number of [ and ]
+    pub fn new(length: usize) -> Self {
+        Self { 
+            program: vec![' '; length], 
+            back_jumps: vec![0; length], 
+            forward_jumps: vec![0; length],
+        }
+    }
+
+    fn is_valid(program: &Vec<char>) -> bool {
         let mut branch_counter = 0;
-        for character in &program {
-            if *character == '[' {
-                branch_counter += 1;
-            } else if *character == ']' {
-                branch_counter -= 1;
+        let mut ptr = program.as_ptr();
+        
+        // Critical path - raw pointers offer a (very) small speedup
+        let end = unsafe { ptr.add(program.len()) };
+        while ptr != end {
+            unsafe {
+                if *ptr == '[' {
+                    branch_counter += 1;
+                } else if *ptr == ']' {
+                    branch_counter -= 1;
+                    if branch_counter < 0 {
+                        return false;
+                    }
+                }
+                ptr = ptr.add(1);
             }
         }
 
-        if branch_counter != 0{
-            return Err(());
+        branch_counter == 0
+    }
+
+    // Returns true if valid program
+    pub fn load(&mut self, program: &Vec<char>) -> bool {
+        // Short circuit if there are not the same number of [ and ]
+        if !Self::is_valid(program) {
+            return false;
         }
 
         let mut loop_stack: Vec<usize> = vec![];
-        let mut back_jumps: Vec<usize> = vec![0; program.len()];
-        let mut forward_jumps: Vec<usize> = vec![0; program.len()];
 
         // Build jump tables using loop stack
         for i in program.iter().enumerate() {
@@ -31,25 +52,27 @@ impl Solution {
                 '<' | '>' | '.' | '~' => (),
                 '[' => loop_stack.push(i.0),
                 ']' => {
-                    let start_index = loop_stack.pop()
-                        .ok_or({})?;
-                        //.ok_or_else(|| eprintln!("Mismatched ] at index {}", i))?;
-                    back_jumps[i.0] = start_index + 1;
-                    forward_jumps[start_index] = i.0 + 1;
+                    let start_index = loop_stack.pop();
+                    if start_index.is_none() {
+                        return false;
+                    }
+                    let start_index = start_index.unwrap();
+                    self.back_jumps[i.0] = start_index + 1;
+                    self.forward_jumps[start_index] = i.0 + 1;
                 }
                 _ => {
                     //eprintln!("Invalid token '{}'", character);
-                    return Err(());
+                    return false;
                 }
             }
         }
 
         if !loop_stack.is_empty() {
-            //eprintln!("Unclosed [");
-            return Err(())
+            return false
         }
 
-        Ok(Self { program, back_jumps, forward_jumps })
+        self.program = program.clone();
+        true
     }
 
     pub fn get_token(&self, i: usize) -> Option<char> {
